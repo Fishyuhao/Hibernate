@@ -5,7 +5,7 @@
 ### 导入jar包和数据库
  1. 创建数据库cst_customer和表cst_customer
    ```sql
-   cst_customerCREATE TABLE `cst_customer` (
+  CREATE TABLE `cst_customer` (
   `cust_id` bigint(32) NOT NULL AUTO_INCREMENT COMMENT '客户编号(主键)',
   `cust_name` varchar(32) NOT NULL COMMENT '客户名称(公司名称)',
   `cust_source` varchar(32) DEFAULT NULL COMMENT '客户信息来源',
@@ -276,3 +276,294 @@ Session代表的是Hibernate与数据库的连接对象，不是线程安全的�
 		session.close();
 	}
   ```
+
+#### 持久化类的编写规则
+  1. 持久化类：将内存中的一个对象持久化到数据库中的过程。Hibernate框架就是用来进行持久化的框架。
+  2. 持久化类：一个java对象与数据库的表建立了映射关系，那么这个类在Hibernate中称为持久化类，持久化类=java类+映射文件
+  3. 持久化类的编写规则
+   * 对持久化类提供一个无参的构造方法。
+   * 属性需要私有化，对私有属性提供public的get和set方法
+   * 对持久化类提供一个唯一标识OID与数据库主键对应
+   * 持久化类中的属性尽量使用包装类型
+   * 持久化类不要使用final进行修饰
+
+#### 主键生成策略
+1. 在实际开发中，尽量使用代理主键(与表不相关的字段id)
+2. 主键生成策略
+ * increment:自动增长机制，适用于short、int、long类型的主键，有线程安全问题。hibernate提供的自动增长机制，会用select max(id) from table;查询出最大的id之后又+1作为主键。
+ * identify:适用于适用于short、int、long类型的主键，适用于有自动增长机制的数据量(MySQL,MSSQL),Oracle没有自动增长机制
+ * sequence:适用于short、int、long类型的主键，采用序列的方式，Oracle支持，MySQL不支持。
+ * uuid:适用于字符串类型的主键，使用hibernate中的随机方式生成字符串主键。
+ * native:本地策略，在identify和sequence之间自动切换。
+ * assigned:hibernate放弃外键管理，需要通过手动编写程序或用户自己设置
+ * foreign:外部的。一对一的一种关联映射的情况下使用(了解);
+
+#### 持久化类的3中状态
+1. 瞬时态:没有唯一标识oid，没有Session管理
+2. 持久态:有唯一标识oid，被Session管理
+3. 脱管态:有唯一标识oid，没有被Session管理
+```java
+public class HibernateState{
+  public void state(){
+    @Test
+    Session session=HibernateUtils.openSession();
+    Transaction transaction=session.beginTransaction();
+
+    Customer customer=new Customer();//瞬时态
+    customer.setCust_name("lily");
+
+    Serializable id=session.save(customer);//持久态
+
+    transaction.commit();
+    session.close();
+    System.out.println("姓名:"+customer.getCust_name());//脱管态
+
+  }
+}
+```
+
+#### 设置hibernate的隔离级别
+* Read uncommitted-1
+* Read committed:解决脏读-2
+* Repeatable read:解决脏读和不可重复读-4
+* Serializable:解决所有问题-3
+```xml
+<property name="hibernate.connection.isolocation">4</property>
+```
+
+#### 线程绑定的Session
+1. 改写工具类
+```java
+public static Session getCurrentSession() {
+		return sf.getCurrentSession();
+	}
+```
+2. 配置文件hibernate.cfg.xml
+```xml
+<!-- 配置当前线程绑定的Session -->
+<property name="hibernate.current_session_context_class">thread</property>
+```
+
+#### Hibernate的Query
+1. 简单查询
+```java
+public void Query() {
+		Session session=HibernateUtils.getCurrentSession();
+		Transaction transaction=session.beginTransaction();
+		//通过Session获取Query接口
+		String hql="from Customer";
+		Query query=session.createQuery(hql);
+		List<Customer> list=query.list();
+		for(Customer customer:list) {
+			System.out.println(customer);
+		}
+		transaction.commit();
+	}
+```
+2. 条件查询
+```java
+public void Query() {
+		Session session=HibernateUtils.getCurrentSession();
+		Transaction transaction=session.beginTransaction();
+		//通过Session获取Query接口
+		String hql="from Customer where cust_name like ?";
+		Query query=session.createQuery(hql);
+		query.setParameter(0, "c%");//条件查询
+		List<Customer> list=query.list();
+		for(Customer customer:list) {
+			System.out.println(customer);
+		}
+		transaction.commit();
+	}
+```
+3. 分页查询
+```java
+public void Query() {
+		Session session=HibernateUtils.getCurrentSession();
+		Transaction transaction=session.beginTransaction();
+		//通过Session获取Query接口
+		String hql="from Customer";
+		Query query=session.createQuery(hql);
+		query.setFirstResult(3);
+		query.setMaxResults(3);
+		List<Customer> list=query.list();
+		for(Customer customer:list) {
+			System.out.println(customer);
+		}
+		transaction.commit();
+	}
+```
+
+#### Hibernate的Criteria
+```java
+public void CriteriaQuery() {
+		Session session=HibernateUtils.getCurrentSession();
+		Transaction tx=session.beginTransaction();
+		/*简单查询
+		Criteria criteria=session.createCriteria(Customer.class);*/
+
+		/*//条件查询
+    Criteria criteria=session.createCriteria(Customer.class);
+		criteria.add(Restrictions.like("cust_name", "c%"));*/
+
+		//分页查询
+		Criteria criteria=session.createCriteria(Customer.class);
+		criteria.setFirstResult(0);
+		criteria.setMaxResults(3);
+
+		List<Customer> list=criteria.list();
+		for(Customer customer:list) {
+			System.out.println(customer);
+		}
+		tx.commit();
+	}
+```
+#### 一对多查询
+* 数据库建表
+```sql
+CREATE TABLE `cst_customer` (
+`cust_id` bigint(32) NOT NULL AUTO_INCREMENT COMMENT '客户编号(主键)',
+`cust_name` varchar(32) NOT NULL COMMENT '客户名称(公司名称)',
+`cust_source` varchar(32) DEFAULT NULL COMMENT '客户信息来源',
+`cust_industry` varchar(32) DEFAULT NULL COMMENT '客户所属行业',
+`cust_level` varchar(32) DEFAULT NULL COMMENT '客户级别',
+`cust_phone` varchar(64) DEFAULT NULL COMMENT '固定电话',
+`cust_mobile` varchar(16) DEFAULT NULL COMMENT '移动电话',
+PRIMARY KEY (`cust_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
+CREATE TABLE `cst_linkman` (
+  `lkm_id` bigint(32) NOT NULL AUTO_INCREMENT COMMENT '联系人编号(主键)',
+  `lkm_name` varchar(16) DEFAULT NULL COMMENT '联系人姓名',
+  `lkm_cust_id` bigint(32) DEFAULT NULL COMMENT '客户id',
+  `lkm_gender` char(1) DEFAULT NULL COMMENT '联系人性别',
+  `lkm_phone` varchar(16) DEFAULT NULL COMMENT '联系人办公电话',
+  `lkm_mobile` varchar(16) DEFAULT NULL COMMENT '联系人手机',
+  `lkm_email` varchar(64) DEFAULT NULL COMMENT '联系人邮箱',
+  `lkm_qq` varchar(16) DEFAULT NULL COMMENT '联系人qq',
+  `lkm_position` varchar(16) DEFAULT NULL COMMENT '联系人职位',
+  `lkm_memo` varchar(512) DEFAULT NULL COMMENT '联系人备注',
+  PRIMARY KEY (`lkm_id`),
+  KEY `FK_cst_linkman_lkm_cust_id` (`lkm_cust_id`),
+  CONSTRAINT `FK_cst_linkman_lkm_cust_id` FOREIGN KEY (`lkm_cust_id`) REFERENCES `cst_customer` (`cust_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
+```
+* 加载映射文件:hibernate.cfg.xml
+```xml
+<mapping resource="com/itheima/hibernate/domain/Customer.hbm.xml"/>
+<mapping resource="com/itheima/hibernate/domain/LinkMan.hbm.xml"/>
+```
+* Customer.java
+```java
+public class Customer {
+			private Long cust_id;
+			private String cust_name;
+			private String cust_source;
+			private String cust_industry;
+			private String cust_level;
+			private String cust_phone;
+			private String cust_mobile;
+			private Set<LinkMan> linkMans=new HashSet<LinkMan>();//关联多个联系人
+    }
+```
+* LinkMan.java
+```java
+public class LinkMan {
+	private Long lkm_id;
+	private String lkm_name;
+	private char lkm_gender;
+	private String lkm_phone;
+	private String lkm_mobile;
+	private String lkm_email;
+	private String lkm_qq;
+	private String lkm_position;
+	private String lkm_memo;
+	private Customer customer;//关联一个顾客
+}
+```
+* Customer.hbm.xml
+```xml
+<hibernate-mapping>
+<!--建立类与表之间的映射-->
+<class name="com.itheima.hibernate.domain.Customer" table="cst_customer">
+	<!-- 建立类中属性与表中主键的映射 -->
+	<id name="cust_id" column="cust_id">
+		<generator class="native"/>
+	</id>
+	<!-- 建立类中普通属性与表的字段的映射 -->
+	<property name="cust_name" column="cust_name"></property>
+	<property name="cust_source" column="cust_source"></property>
+	<property name="cust_industry" column="cust_industry"></property>
+	<property name="cust_level" column="cust_level"></property>
+	<property name="cust_phone" column="cust_phone"></property>
+	<property name="cust_mobile" column="cust_mobile"></property>
+	<!--
+		set标签:
+			name:多的一方的对象集合属性名称
+			key:column多的一方的外键名
+	 -->
+	<set name="linkMans" cascade="save-update" inverse="true">
+		<key column="lkm_cust_id"/>
+		<one-to-many class="com.itheima.hibernate.domain.LinkMan"/>
+	</set>
+</class>
+</hibernate-mapping>
+```
+* LinkMan.hbm.xml
+```xml
+<hibernate-mapping>
+	<class name="com.itheima.hibernate.domain.LinkMan" table="cst_linkman">
+		<id name="lkm_id" column="lkm_id">
+			<generator class="native"/>
+		</id>
+		<property name="lkm_name" column="cust_name"></property>
+		<property name="lkm_gender" column="lkm_gender"></property>
+		<property name="lkm_phone" column="lkm_phone"></property>
+		<property name="lkm_mobile" column="lkm_mobile"></property>
+		<property name="lkm_email" column="lkm_email"></property>
+		<property name="lkm_qq" column="lkm_qq"></property>
+		<property name="lkm_position" column="lkm_position"></property>
+		<property name="lkm_memo" column="lkm_memo"></property>
+		<!--
+			many-to-one标签
+			name:一的一方的对象属性名
+			class:一的一方的类全路径
+			column:多的一方的外键
+		 -->
+		<many-to-one name="customer" class="com.itheima.hibernate.domain.Customer" column="lkm_cust_id"/>
+	</class>
+</hibernate-mapping>
+```
+* 测试方法
+```java
+@Test
+	public void oneToMany() {
+		Session session=HibernateUtils.getCurrentSession();
+		Transaction tx=session.beginTransaction();
+		//创建2个顾客
+		Customer customer1=new Customer();
+		customer1.setCust_name("Jobs");
+		Customer customer2=new Customer();
+		customer2.setCust_name("Hub");
+		//创建3个联系人
+		LinkMan linkMan1=new LinkMan();
+		linkMan1.setLkm_name("Alec");
+		LinkMan linkMan2=new LinkMan();
+		linkMan2.setLkm_name("Allen");
+		LinkMan linkMan3=new LinkMan();
+		linkMan3.setLkm_name("Bobby");
+		//设置关系
+		linkMan1.setCustomer(customer1);
+		linkMan2.setCustomer(customer1);
+		linkMan3.setCustomer(customer2);
+		customer1.getLinkMans().add(linkMan1);
+		customer1.getLinkMans().add(linkMan2);
+		customer2.getLinkMans().add(linkMan3);
+		session.save(linkMan1);
+		session.save(linkMan2);
+		session.save(linkMan3);
+		session.save(customer1);
+		session.save(customer2);
+
+		tx.commit();
+	}
+```
