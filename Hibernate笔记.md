@@ -477,7 +477,7 @@ public class LinkMan {
 	private String lkm_qq;
 	private String lkm_position;
 	private String lkm_memo;
-	private Customer customer;//关联一个顾客
+	private Customer customer;//关联一个客户
 }
 ```
 * Customer.hbm.xml
@@ -567,3 +567,205 @@ public class LinkMan {
 		tx.commit();
 	}
 ```
+
+#### 一对多的级联操作
+* 级联操作指的是操作一个对象的时候是否会同时操作其关联的对象
+#####  保存客户级联联系人
+* 配置文件Customer.hbm.xml
+```xml
+<set name="linkMans" cascade="save-update">
+		<key column="lkm_cust_id"/>
+		<one-to-many class="com.itheima.hibernate.domain.LinkMan"/>
+	</set>
+```
+* 测试类
+```java
+@Test
+	public void Jlcx() {
+		Session session=HibernateUtils.getCurrentSession();
+		Transaction tx=session.beginTransaction();
+		//创建1个客户
+		Customer customer=new Customer();
+		customer.setCust_name("Noah");
+		//创建一个联系人
+		LinkMan linkMan=new LinkMan();
+		linkMan.setLkm_name("Jack");
+		//设置关系
+		linkMan.setCustomer(customer);
+		customer.getLinkMans().add(linkMan);
+		session.save(customer);//保存客户级联联系人
+		tx.commit();
+	}
+```
+##### 保存联系人级联客户
+* 配置LinkMan.hbm.xml
+```xml
+<many-to-one name="customer" cascade="save-update" class="com.itheima.hibernate.domain.Customer" column="lkm_cust_id"/>
+```
+* 测试类
+```java
+@Test
+	public void Jlcx() {
+		Session session=HibernateUtils.getCurrentSession();
+		Transaction tx=session.beginTransaction();
+		//创建1个客户
+		Customer customer=new Customer();
+		customer.setCust_name("David");
+		//创建一个联系人
+		LinkMan linkMan=new LinkMan();
+		linkMan.setLkm_name("Tyler");
+		//设置关系
+		linkMan.setCustomer(customer);
+		customer.getLinkMans().add(linkMan);
+		session.save(linkMan);//保存联系人级联客户
+		tx.commit();
+	}
+```
+##### 对象导航测试
+```java
+//对象导航的测试
+	public void ProjectNavigation() {
+		Session session=HibernateUtils.getCurrentSession();
+		Transaction tx=session.beginTransaction();
+		//创建1个客户
+		Customer customer=new Customer();
+		customer.setCust_name("David");
+		//创建3个联系人
+		LinkMan linkMan1=new LinkMan();
+		linkMan1.setLkm_name("Tyler");
+		LinkMan linkMan2=new LinkMan();
+		linkMan2.setLkm_name("Bobby");
+		LinkMan linkMan3=new LinkMan();
+		linkMan3.setLkm_name("Allen");
+
+		linkMan1.setCustomer(customer);
+		customer.getLinkMans().add(linkMan2);
+		customer.getLinkMans().add(linkMan3);
+		//双方配置文件都设置了cascade
+		session.save(linkMan1);//发送4条insert语句(保存customer,linkMan1,linkMan2,linkMan3)
+		session.save(customer);//发送3条insert语句(保存customer,linkMan2,linkMan3)
+		session.save(linkMan2);//发送1条insert语句(保存linkMan2)
+
+	}
+```
+#### 删除客户级联联系人
+* 配置文件Customer.hbm.xml
+```xml
+<set name="linkMans" cascade="save-update,delete">
+		<key column="lkm_cust_id"/>
+		<one-to-many class="com.itheima.hibernate.domain.LinkMan"/>
+	</set>
+```
+* 测试方法
+```java
+//级联删除
+	@Test
+	public void Jlsc() {
+		Session session=HibernateUtils.getCurrentSession();
+		Transaction tx=session.beginTransaction();
+		//没有设置级联删除，默认情况:修改联系人的外键为null,删除客户
+		Customer customer=session.get(Customer.class, 1l);
+		session.delete(customer);
+		//删除客户同时删除联系人
+		Customer customer1=session.get(Customer.class, 2l);
+		session.delete(customer1);
+		tx.commit();
+	}
+```
+#### 双向关联问题---inverse
+* 双向维护关系产生多余的SQL语句
+ * 使客户一方放弃外键维护权
+ ```xml
+ <!--
+ cascade:设置级联
+ inverse:设置外键维护权,默认为false不放弃，为true放弃外键权
+-->
+ <set name="linkMans" cascade="save-update,delete" inverse="false">
+		<key column="lkm_cust_id"/>
+		<one-to-many class="com.itheima.hibernate.domain.LinkMan"/>
+	</set>
+ ```
+
+ #### 多对多操作
+ * 建表sql
+ ```sql
+ -- 用户表
+CREATE TABLE `sys_user` (
+  `user_id` bigint(32) NOT NULL AUTO_INCREMENT COMMENT '用户id',
+  `user_code` varchar(32) DEFAULT NULL COMMENT '用户账号',
+  `user_name` varchar(64) DEFAULT NULL COMMENT '用户名称',
+  `user_password` varchar(32) DEFAULT NULL COMMENT '用户密码',
+  `user_state` char(1) DEFAULT NULL COMMENT '1:正常,0:暂停',
+  PRIMARY KEY (`user_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
+-- 角色表
+CREATE TABLE `sys_role` (
+  `role_id` bigint(32) NOT NULL AUTO_INCREMENT,
+  `role_name` varchar(32) NOT NULL COMMENT '角色名称',
+  `role_memo` varchar(128) DEFAULT NULL COMMENT '备注',
+  PRIMARY KEY (`role_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
+-- 中间表
+CREATE TABLE `sys_user_role` (
+  `role_id` bigint(32) NOT NULL COMMENT '角色id',
+  `user_id` bigint(32) NOT NULL COMMENT '用户id',
+  PRIMARY KEY (`role_id`,`user_id`),
+  KEY `FK_user_role_user_id` (`user_id`),
+  CONSTRAINT `FK_user_role_role_id` FOREIGN KEY (`role_id`) REFERENCES `sys_role` (`role_id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `FK_user_role_user_id` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`user_id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+ ```
+ * 创建实体
+ ```java
+ public class User {
+	private Long user_id;
+	private String user_code;
+	private String user_name;
+	private String user_password;
+	private int user_state;
+	private Set<Role> roles=new HashSet<Role>();
+}
+public class Role {
+	private Long role_id;
+	private String role_name;
+	private String role_memo;
+	private Set<User> users=new HashSet<User>();
+}
+ ```
+ * User.hbm.xml
+ ```xml
+ <hibernate-mapping>
+	<class name="com.itheima.hibernate.domain.User" table="sys_user">
+		<id name="user_id" column="user_id">
+			<generator class="native"/>
+		</id>
+		<property name="user_code"/>
+		<property name="user_name"/>
+		<property name="user_password"/>
+		<property name="user_state"/>
+		<set name="roles" table="sys_user_role">
+		<!-- 当前对象对应的中间表的外键名称 -->
+			<key column="user_id"/>
+		<!-- 当前对象对应的中间表的外键名称 -->
+			<many-to-many class="com.itheima.hibernate.domain.Role" column="role_id"/>
+		</set>
+	</class>
+</hibernate-mapping>
+ ```
+ * Role.hbm.xml
+ ```xml
+ <hibernate-mapping>
+	<class name="com.itheima.hibernate.domain.Role" table="sys_role">
+		<id name="role_id" column="role_id">
+			<generator class="native"/>
+		</id>
+		<property name="role_name"/>
+		<property name="role_memo"/>
+    <!--放弃外键维护权-->
+		<set name="users" table="sys_user_role" inverse="true">
+			<key column="role_id"/>
+			<many-to-many class="com.itheima.hibernate.domain.User" column="user_id"/>
+		</set>
+	</class>
+</hibernate-mapping>
+ ```
