@@ -206,10 +206,11 @@ public class HibernateUtils {
 	}
 }
 ```
-#### Session对象
+### Session对象
 Session代表的是Hibernate与数据库的连接对象，不是线程安全的，所以要定义成局部变量。
 * Session中API
  * 保存方法
+
    * Serializable save(Object obj):返回一个id
  * 查询方法
    * T get(Class c,Serializable id);
@@ -277,7 +278,7 @@ Session代表的是Hibernate与数据库的连接对象，不是线程安全的�
 	}
   ```
 
-#### 持久化类的编写规则
+### 持久化类的编写规则
   1. 持久化类：将内存中的一个对象持久化到数据库中的过程。Hibernate框架就是用来进行持久化的框架。
   2. 持久化类：一个java对象与数据库的表建立了映射关系，那么这个类在Hibernate中称为持久化类，持久化类=java类+映射文件
   3. 持久化类的编写规则
@@ -287,7 +288,7 @@ Session代表的是Hibernate与数据库的连接对象，不是线程安全的�
    * 持久化类中的属性尽量使用包装类型
    * 持久化类不要使用final进行修饰
 
-#### 主键生成策略
+### 主键生成策略
 1. 在实际开发中，尽量使用代理主键(与表不相关的字段id)
 2. 主键生成策略
  * increment:自动增长机制，适用于short、int、long类型的主键，有线程安全问题。hibernate提供的自动增长机制，会用select max(id) from table;查询出最大的id之后又+1作为主键。
@@ -298,7 +299,7 @@ Session代表的是Hibernate与数据库的连接对象，不是线程安全的�
  * assigned:hibernate放弃外键管理，需要通过手动编写程序或用户自己设置
  * foreign:外部的。一对一的一种关联映射的情况下使用(了解);
 
-#### 持久化类的3中状态
+### 持久化类的3中状态
 1. 瞬时态:没有唯一标识oid，没有Session管理
 2. 持久态:有唯一标识oid，被Session管理
 3. 脱管态:有唯一标识oid，没有被Session管理
@@ -322,7 +323,7 @@ public class HibernateState{
 }
 ```
 
-#### 设置hibernate的隔离级别
+### 设置hibernate的隔离级别
 * Read uncommitted-1
 * Read committed:解决脏读-2
 * Repeatable read:解决脏读和不可重复读-4
@@ -331,7 +332,7 @@ public class HibernateState{
 <property name="hibernate.connection.isolocation">4</property>
 ```
 
-#### 线程绑定的Session
+### 线程绑定的Session
 1. 改写工具类
 ```java
 public static Session getCurrentSession() {
@@ -344,7 +345,7 @@ public static Session getCurrentSession() {
 <property name="hibernate.current_session_context_class">thread</property>
 ```
 
-#### Hibernate的Query
+### Hibernate的Query
 1. 简单查询
 ```java
 public void Query() {
@@ -394,7 +395,7 @@ public void Query() {
 	}
 ```
 
-#### Hibernate的Criteria
+### Hibernate的Criteria
 ```java
 public void CriteriaQuery() {
 		Session session=HibernateUtils.getCurrentSession();
@@ -418,7 +419,7 @@ public void CriteriaQuery() {
 		tx.commit();
 	}
 ```
-#### 一对多查询
+### 一对多查询
 * 数据库建表
 ```sql
 CREATE TABLE `cst_customer` (
@@ -648,7 +649,7 @@ public class LinkMan {
 
 	}
 ```
-#### 删除客户级联联系人
+##### 删除客户级联联系人
 * 配置文件Customer.hbm.xml
 ```xml
 <set name="linkMans" cascade="save-update,delete">
@@ -686,7 +687,7 @@ public class LinkMan {
 	</set>
  ```
 
- #### 多对多操作
+ ### 多对多操作
  * 建表sql
  ```sql
  -- 用户表
@@ -769,3 +770,39 @@ public class Role {
 	</class>
 </hibernate-mapping>
  ```
+
+#### 多对多的级联保存与更新
+
+- 保存用户级联保护角色或者保存角色级联保存用户
+
+  ```xml
+  在<many-to-many/>标签里配置cascade="save-update"
+  ```
+
+- 删除用户级联保护角色或者保存角色级联保存用户
+
+  ```xml
+  在<many-to-many/>标签里配置cascade="delete"多对多的其他操作
+  ```
+
+#### 多对多的其他操作
+
+- 给用户选择角色
+
+  ```java
+  //给1号用户新增3号角色
+  User user=session.get(User.class, 1l);
+  Role role=session.get(Role.class, 3l);
+  user.getRoles().add(role);
+  ```
+
+- 给用户改选角色
+
+  ```java
+  //给1号用户将3号角色改选为2号角色
+  User user=session.get(User.class, 1l);
+  Role role3=session.get(Role.class, 3l);
+  Role role2=session.get(Role.class, 2l);
+  user.getRoles().remove(role3);//对用户进行删除角色的操作
+  user.getRoles().add(role2);
+  ```
